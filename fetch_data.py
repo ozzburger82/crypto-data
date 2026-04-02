@@ -15,7 +15,7 @@ TIMEFRAMES = {
     "5": 5,
 }
 
-INITIAL_HISTORY_DAYS = 365
+INITIAL_HISTORY_DAYS = 90
 BASE_URL = "https://api.bybit.com"
 DATA_DIR = "data"
 
@@ -70,46 +70,3 @@ def raw_to_dataframe(raw_data):
     df["open_time"] = pd.to_datetime(df["open_time"].astype(int), unit="ms")
     for col in ["open", "high", "low", "close", "volume", "turnover"]:
         df[col] = df[col].astype(float)
-    df = df.drop_duplicates(subset=["open_time"])
-    df = df.sort_values("open_time").reset_index(drop=True)
-    return df
-
-
-def update_pair_timeframe(symbol, interval):
-    filename = f"{DATA_DIR}/{symbol}_{interval}.csv"
-    if os.path.exists(filename):
-        existing = pd.read_csv(filename, parse_dates=["open_time"])
-        last_time = existing["open_time"].max()
-        start_date = last_time - timedelta(hours=1)
-        print(f"  Updating from {start_date}")
-    else:
-        existing = None
-        start_date = datetime.utcnow() - timedelta(days=INITIAL_HISTORY_DAYS)
-        print(f"  Initial fetch from {start_date}")
-    end_date = datetime.utcnow()
-    raw = fetch_all_klines(symbol, interval, start_date, end_date)
-    if not raw:
-        print(f"  No new data")
-        return
-    new_df = raw_to_dataframe(raw)
-    if existing is not None:
-        combined = pd.concat([existing, new_df], ignore_index=True)
-        combined = combined.drop_duplicates(subset=["open_time"])
-        combined = combined.sort_values("open_time").reset_index(drop=True)
-    else:
-        combined = new_df
-    combined.to_csv(filename, index=False)
-    print(f"  Saved {len(combined)} total candles to {filename}")
-
-
-def main():
-    os.makedirs(DATA_DIR, exist_ok=True)
-    for symbol in PAIRS:
-        for interval in TIMEFRAMES:
-            print(f"\nFetching {symbol} {interval}")
-            update_pair_timeframe(symbol, interval)
-    print("\nDone!")
-
-
-if __name__ == "__main__":
-    main()
